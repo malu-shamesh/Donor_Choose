@@ -40,15 +40,3 @@ Outputs land in `outputs/` (plots, ROC curve CSVs, confusion matrices for both s
 ```bash
 pytest
 ```
-
-## Why these changes
-
-**Model**: the notebook tuned a `DecisionTreeClassifier` over `max_depth`/`min_samples_split`, reaching ~0.65 test AUC on both the BoW and TF-IDF feature sets - a single tree struggles with this kind of high-dimensional sparse text+categorical data. `XGBClassifier` handles it substantially better.
-
-**Duplicated code**: the notebook ran the entire encoding-and-modeling process twice - "Case 1" with `CountVectorizer`, "Case 2" with `TfidfVectorizer" - with each cell copy-pasted and only the vectorizer changed. `fit_encoding_pipeline()` takes the vectorizer class as a parameter, so both runs share one code path (`--vectorizer bow|tfidf`).
-
-**Normalizer bug**: the notebook scaled `price`/`quantity`/`teacher_number_of_previously_posted_projects` with `Normalizer().fit(X_train['price'].values.reshape(1,-1))`. Reshaping a column to `(1, -1)` turns the entire column into a single sample with N features, so `Normalizer` computes one L2 norm across all of a column's values combined - not what a per-feature scaler is supposed to do, and it silently produces different scaling depending on what else happens to be reshaped alongside it. `MinMaxScaler` is used instead, on properly shaped `(n_samples, n_features)` data, and a test (`test_scale_numeric_columns_scales_each_feature_independently`) verifies each column now scales independently of the others.
-
-**`SettingWithCopyWarning`**: the notebook mutated `donor_data_na[df_norm.columns] = df_norm` in place on a DataFrame produced by `.dropna()` (a copy of a slice), which pandas flags as ambiguous. `scale_numeric_columns()` works on an explicit `.copy()` instead.
-
-**Verification**: the encoding pipeline was tested with both `CountVectorizer` and `TfidfVectorizer` to confirm the deduplicated code path works for both cases the notebook ran separately.
